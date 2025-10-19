@@ -68,7 +68,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 "/api/auth/reset-password",
                 "/api/auth/refresh-accessToken",
                 "/ws",
-                "/payment/callback"
+                "/payment/callback",
+
+                // Swagger & OpenAPI endpoints
+                "/swagger-ui",
+                "/v3/api-docs",
+                "/swagger-resources",
+                "/webjars"
         );
         return excludedPaths.stream().anyMatch(path::startsWith);
     }

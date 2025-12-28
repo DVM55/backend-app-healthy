@@ -1,6 +1,9 @@
 package com.example.chat.exception;
 
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -52,6 +55,56 @@ public class GlobalExceptionHandler {
                 .message(e.getMessage())
                 .build();
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(exceptionResponse);
+    }
+
+    @ExceptionHandler(ExpiredJwtException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> handleExpiredJwtException(ExpiredJwtException e) {
+        ExceptionResponse response = ExceptionResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.UNAUTHORIZED)
+                .message("Token đã hết hạn")
+                .details("Expired at: " + e.getClaims().getExpiration())
+                .build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> handleSecurityException(SecurityException e) {
+
+        ExceptionResponse response = ExceptionResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.UNAUTHORIZED)
+                .message("Chữ ký JWT không hợp lệ")
+                .details(e.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(MalformedJwtException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ExceptionResponse> handleMalformedJwtException(MalformedJwtException e) {
+        ExceptionResponse response = ExceptionResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.BAD_REQUEST)
+                .message("Định dạng JWT không hợp lệ")
+                .details(e.toString())
+                .build();
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(UnsupportedJwtException.class)
+    @ResponseStatus(value = HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> handleUnsupportedJwtException(UnsupportedJwtException e) {
+        ExceptionResponse exceptionResponse = ExceptionResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.UNAUTHORIZED)
+                .details(e.toString())
+                .message("JWT không được hỗ trợ")
+                .build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(exceptionResponse);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

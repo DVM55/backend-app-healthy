@@ -1,27 +1,27 @@
 package com.example.chat.controller;
 
 import com.example.chat.dto.ApiResponse;
-import com.example.chat.dto.req.ChangePasswordRequest;
-import com.example.chat.dto.req.LoginRequest;
-import com.example.chat.dto.req.RegisterRequest;
-import com.example.chat.dto.req.ResetPasswordRequest;
+import com.example.chat.dto.req.*;
 import com.example.chat.dto.res.LoginResponse;
 import com.example.chat.dto.res.RegisterResponse;
 import com.example.chat.entity.Account;
 import com.example.chat.entity.UserDetail;
 import com.example.chat.enums.AuthProvider;
 import com.example.chat.enums.Role;
+
 import com.example.chat.repository.AccountRepository;
 import com.example.chat.security.JwtTokenProvider;
 import com.example.chat.service.AuthService;
 import com.example.chat.service.GoogleTokenVerifierService;
+
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -35,6 +35,7 @@ public class AuthController {
     private final GoogleTokenVerifierService googleVerifier;
     private final JwtTokenProvider jwtTokenProvider;
     private final AccountRepository accountRepository;
+
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<RegisterResponse>> register(@RequestBody @Valid RegisterRequest request) {
@@ -51,48 +52,87 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody @Valid LoginRequest request) {
-        LoginResponse response = authService.login(request);
+    public ResponseEntity<ApiResponse<Void>> login(@RequestBody @Valid LoginRequest request) {
+        authService.login(request);
 
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Vui lòng xác thực tài khoản bước 2")
+                        .data(null)
+                        .build()
+        );
+    }
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<ApiResponse<Void>> sendOTP(
+            @RequestBody @Valid EmailRequest request
+    ){
+        authService.sendOTP(request);
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Đã gửi mã OTP đến email của bạn")
+                        .data(null)
+                        .build()
+        );
+    }
+
+    @PostMapping("/verify-account")
+    public ResponseEntity<ApiResponse<LoginResponse>> verifyAccount(
+            @RequestBody @Valid VerifyAccountRequest request
+    ){
+        LoginResponse data = authService.verifyAccount(request);
         return ResponseEntity.ok(
                 ApiResponse.<LoginResponse>builder()
                         .code(HttpServletResponse.SC_OK)
-                        .message("Đăng nhập thành công")
-                        .data(response)
+                        .message("Xác thực tài khoản thành công")
+                        .data(data)
                         .build()
         );
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<String> forgotPassword(@RequestParam String email) throws Exception {
-        authService.processForgotPassword(email);
-        return ResponseEntity.ok("✅ OTP đã được gửi đến email " + email);
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestBody @Valid EmailRequest request){
+        authService.processForgotPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Đã gửi mã OTP đến email của bạn")
+                        .data(null)
+                        .build()
+        );
     }
 
     /**
      * Bước 2: Xác thực OTP
      */
     @PostMapping("/verify-otp")
-    public ResponseEntity<String> verifyOtp(@RequestParam String email, @RequestParam String otp) {
-        boolean valid = authService.verifyOtp(email, otp);
-        if (valid) {
-            return ResponseEntity.ok("✅ OTP hợp lệ");
-        } else {
-            return ResponseEntity.badRequest().body("❌ OTP không chính xác hoặc đã hết hạn");
-        }
+    public ResponseEntity<ApiResponse<?>> verifyOtp(@RequestBody @Valid VerifyAccountRequest request) {
+
+        authService.verifyOtp(request);
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Xác thực OTP thành công")
+                        .data(null)
+                        .build()
+        );
     }
 
     /**
      * Bước 3: Đặt lại mật khẩu mới
      */
     @PostMapping("/reset-password")
-    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(
-                request.getEmail(),
-                request.getOtp(),
-                request.getNewPassword()
+    public  ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody @Valid ResetPasswordRequest request){
+        authService.resetPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Đặt lại mật khẩu thành công")
+                        .data(null)
+                        .build()
         );
-        return ResponseEntity.ok("✅ Đặt lại mật khẩu thành công");
     }
 
     @PostMapping("/updated-password")
@@ -163,13 +203,24 @@ public class AuthController {
         return ResponseEntity.ok(authService.refreshToken(refreshToken, deviceId));
     }
 
+
+
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestBody Map<String, String> body) {
-        Long accountId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        String deviceId = body.get("deviceId");
-        authService.logout(accountId, deviceId);
-        return ResponseEntity.ok(Map.of("message", "Đăng xuất thành công"));
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestHeader("Authorization") String token,
+            @RequestBody @Valid LogOutRequest request
+    ) {
+        authService.logout(token, request.getDeviceId());
+
+        return ResponseEntity.ok(
+                ApiResponse.<Void>builder()
+                        .code(HttpServletResponse.SC_OK)
+                        .message("Đăng xuất thành công")
+                        .data(null)
+                        .build()
+        );
     }
+
 
 }
 

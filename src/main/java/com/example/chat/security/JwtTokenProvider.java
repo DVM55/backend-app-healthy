@@ -94,4 +94,37 @@ public class JwtTokenProvider {
     public Long getAccountIdFromRefreshToken(String token) {
         return getClaims(token, refreshSecretKey).get("accountId", Long.class);
     }
+
+    public long getExpirationTime(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(accessSecretKey)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            return claims.getExpiration().getTime();
+
+        } catch (ExpiredJwtException e) {
+            return e.getClaims().getExpiration().getTime();
+        }
+    }
+
+
+    public Long extractUserIdIgnoreExpiration(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(accessSecretKey)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            return Long.parseLong(claims.get("accountId").toString());
+
+        } catch (ExpiredJwtException e) {
+            Claims claims = e.getClaims();
+            return Long.parseLong(claims.get("accountId").toString());
+        }
+    }
+
 }

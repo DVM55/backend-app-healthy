@@ -1,6 +1,7 @@
 package com.example.chat.entity;
 
 import com.example.chat.enums.MessageType;
+import com.example.chat.security.AesEncryptor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -35,9 +36,11 @@ public class Message {
     @Enumerated(EnumType.STRING)
     private MessageType messageType;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "message_content")
     private String messageContent;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "file_url")
     private String fileUrl;
 

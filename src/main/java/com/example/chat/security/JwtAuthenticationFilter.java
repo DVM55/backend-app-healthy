@@ -1,5 +1,6 @@
 package com.example.chat.security;
 
+import com.example.chat.service.RedisBaseService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final RedisBaseService redisBaseService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -35,6 +37,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(7);
+
+        if (redisBaseService.isTokenBlacklisted(token)) {
+            setErrorResponse(response, "Token has been revoked", 401);
+            return;
+        }
 
         if (!jwtTokenProvider.isValidAccessToken(token)) {
             setErrorResponse(response, "Token expired", 401);
@@ -63,10 +70,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 "/api/auth/register",
                 "/api/auth/login",
                 "/api/auth/google",
+                "/api/auth/send-otp",
+                "/api/auth/verify-account",
                 "/api/auth/forgot-password",
                 "/api/auth/verify-otp",
                 "/api/auth/reset-password",
                 "/api/auth/refresh-accessToken",
+                "/api/auth/logout",
                 "/ws",
                 "/payment/callback",
 

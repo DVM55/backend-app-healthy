@@ -12,6 +12,8 @@ public class RedisBaseService {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    private static final String BLACKLIST_PREFIX = "jwt:blacklist:";
+
     public void set(String key, Object value) {
         redisTemplate.opsForValue().set(key, value);
     }
@@ -26,5 +28,24 @@ public class RedisBaseService {
 
     public void delete(String key) {
         redisTemplate.delete(key);
+    }
+
+    /* ================= JWT BLACKLIST ================= */
+
+    /**
+     * Blacklist access token với TTL (milliseconds)
+     */
+    public void blacklistToken(String token, long ttlMillis) {
+        if (ttlMillis <= 0) return;
+
+        String key = BLACKLIST_PREFIX + token;
+        redisTemplate.opsForValue().set(key, "BLACKLISTED", ttlMillis, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Check token có nằm trong blacklist không
+     */
+    public boolean isTokenBlacklisted(String token) {
+        return redisTemplate.hasKey(BLACKLIST_PREFIX + token);
     }
 }

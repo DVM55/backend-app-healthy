@@ -103,8 +103,17 @@ zalopay:
   endpoint: ${ZALOPAY_ENDPOINT}
   callback-url: ${ZALOPAY_CALLBACK_URL}
 
+logging:
+  level:
+    org.springframework.mail: DEBUG
+    jakarta.mail: DEBUG
+    org.eclipse.angus.mail.smtp: DEBUG
 
 firebase:
   credentials: ${FIREBASE_CREDENTIALS}
+
+application:
+  encryption:
+    key: ${APP_ENCRYPTION_KEY}
 
 

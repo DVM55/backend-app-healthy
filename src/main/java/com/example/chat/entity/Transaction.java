@@ -2,6 +2,7 @@ package com.example.chat.entity;
 
 import com.example.chat.enums.PaymentStatus;
 import com.example.chat.enums.RefundStatus;
+import com.example.chat.security.AesEncryptor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -30,12 +31,15 @@ public class Transaction {
     @Column(name = "amount", nullable = false)
     private Long amount;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "app_trans_id", length = 100)
     private String appTransId;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "zp_trans_id", length = 100)
     private String zpTransId;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "refund_id", length = 100)
     private String refundId;
 
@@ -47,6 +51,7 @@ public class Transaction {
     @Column(name = "refund_status", length = 20, nullable = false)
     private RefundStatus refundStatus = RefundStatus.NONE;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "zp_refund_id", length = 100)
     private String zpRefundId;
 

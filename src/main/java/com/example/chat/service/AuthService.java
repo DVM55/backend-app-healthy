@@ -1,7 +1,6 @@
 package com.example.chat.service;
 
-import com.example.chat.dto.req.LoginRequest;
-import com.example.chat.dto.req.RegisterRequest;
+import com.example.chat.dto.req.*;
 import com.example.chat.dto.res.LoginResponse;
 import com.example.chat.dto.res.RegisterResponse;
 import com.example.chat.entity.Account;
@@ -11,8 +10,8 @@ import com.example.chat.exception.ConflictException;
 import com.example.chat.repository.AccountRepository;
 import com.example.chat.repository.DeviceTokenRepository;
 import com.example.chat.repository.KeyRepository;
-import com.example.chat.security.CustomUserDetails;
 import com.example.chat.security.JwtTokenProvider;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,7 +35,8 @@ public class AuthService {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final OtpService otpService;
-    private final MailService mailService;
+    private final RedisBaseService redisBaseService;
+
 
     public RegisterResponse register(RegisterRequest request) {
         if (accountRepository.existsByEmail(request.getEmail())) {
@@ -65,7 +65,7 @@ public class AuthService {
                 .build();
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public void login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -73,9 +73,18 @@ public class AuthService {
                 )
         );
 
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        otpService.sendOTPAsync(request.getEmail(), 1);
+    }
 
-        Account account = userDetails.getAccount();
+
+    public LoginResponse verifyAccount(VerifyAccountRequest request){
+        boolean valid = otpService.verifyOtp(request.getEmail(), request.getOtp());
+        if (!valid) {
+            throw new IllegalArgumentException("OTP không hợp lệ hoặc đã hết hạn");
+        }
+
+        Account account = accountRepository.findByEmail(request.getEmail())
+                .orElseThrow(()-> new EntityNotFoundException("Tài khoản không tồn tại với email:" + request.getEmail()));
 
         // Sinh JWT token
         String accessToken = jwtTokenProvider.generateAccessToken(
@@ -101,13 +110,12 @@ public class AuthService {
         keyRepository.save(key);
 
         String avatarUrl = switch (account.getRole()) {
-            case USER   -> account.getUserDetail() != null
+            case USER, ADMIN   -> account.getUserDetail() != null
                     ? account.getUserDetail().getAvatar_url()
                     : null;
             case DOCTOR -> account.getDoctorDetail() != null
                     ? account.getDoctorDetail().getAvatar_url()
                     : null;
-            default     -> null;
         };
 
         return LoginResponse.builder()
@@ -134,35 +142,49 @@ public class AuthService {
     }
 
 
-    public void processForgotPassword(String email) throws Exception {
-        String otp = otpService.generateOtp(email);
-
-        String subject = "Mã OTP khôi phục mật khẩu";
-        String body = "<p>Xin chào,</p>" +
-                "<p>Mã OTP của bạn là: <b>" + otp + "</b></p>" +
-                "<p>Mã này có hiệu lực trong 15 phút.</p>";
-
-        mailService.sendHtml(email, subject, body);
+    public void processForgotPassword(EmailRequest request)  {
+        if (!accountRepository.existsByEmail(request.getEmail())) {
+            throw new ConflictException("Email này chưa được đăng ký. Không thể thực hiện chức năng này");
+        }
+        otpService.sendOTPAsync(request.getEmail(), request.getType());
     }
 
-    public boolean verifyOtp(String email, String otp) {
-        return otpService.verifyOtp(email, otp);
+    public void verifyOtp(VerifyAccountRequest request) {
+        boolean valid = otpService.verifyOtp(request.getEmail(), request.getOtp());
+        if (!valid) {
+            throw new IllegalArgumentException("OTP không hợp lệ hoặc đã hết hạn");
+        }
     }
 
-    public void resetPassword(String email, String otp, String newPassword) {
-        boolean valid = otpService.verifyOtp(email, otp);
+    public void sendOTP(EmailRequest request){
+        switch (request.getType()) {
+            case 1:
+                otpService.sendOTPAsync(request.getEmail(), 1);
+                break;
+
+            case 2:
+                otpService.sendOTPAsync(request.getEmail(), 2);
+                break;
+
+            default:
+                throw new IllegalArgumentException("Loại OTP không hợp lệ: " + request.getType());
+        }
+    }
+
+    public void resetPassword(ResetPasswordRequest request) {
+        boolean valid = otpService.verifyOtp(request.getEmail(), request.getOtp());
         if (!valid) {
             throw new RuntimeException("❌ Phiên đã hết hạn, vui lòng thực hiện quên mật khẩu lại!");
         }
 
-        Account account = accountRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("❌ Không tìm thấy tài khoản với email: " + email));
+        Account account = accountRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("❌ Không tìm thấy tài khoản với email: " + request.getEmail()));
 
-        account.setPassword(passwordEncoder.encode(newPassword));
+        account.setPassword(passwordEncoder.encode(request.getNewPassword()));
         accountRepository.save(account);
 
         // ✅ Xoá OTP sau khi reset thành công
-        otpService.deleteOtp(email);
+        otpService.deleteOtp(request.getEmail());
     }
 
     public void changePassword(String oldPassword, String newPassword) {
@@ -205,14 +227,23 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(Long accountId, String deviceId) {
-        // Xoá refresh token của user + device
+    public void logout(String authHeader, String deviceId) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new IllegalArgumentException(
+                    "Token Invalid!"
+            );
+        }
+
+        String token = authHeader.substring(7);
+        Long accountId = jwtTokenProvider.extractUserIdIgnoreExpiration(token);
+
+        long expireAt = jwtTokenProvider.getExpirationTime(token);
+        redisBaseService.blacklistToken(token, expireAt);
+
         keyRepository.deleteByAccount_IdAndDeviceId(accountId, deviceId);
 
-        // Xoá luôn fcm token của device
         deviceTokenRepository.deleteByUserIdAndDeviceId(accountId, deviceId);
     }
-
-
 }
 

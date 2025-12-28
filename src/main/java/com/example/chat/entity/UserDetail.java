@@ -2,6 +2,7 @@ package com.example.chat.entity;
 
 import com.example.chat.enums.Gender;
 
+import com.example.chat.security.AesEncryptor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -23,15 +24,18 @@ public class UserDetail {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "phone", length = 20)
     private String phone;
 
     @Column(name = "date_of_birth")
     private LocalDate date_of_birth;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "avatar_url")
     private String avatar_url;
 
+    @Convert(converter = AesEncryptor.class)
     @Column(name = "address", length = 255)
     private String address;
 
